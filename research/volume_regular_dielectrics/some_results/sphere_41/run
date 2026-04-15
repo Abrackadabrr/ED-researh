@@ -1,0 +1,55 @@
+Длина волны в свободном пространстве = 0.999308
+GMRES without precond
+1000
+1 it: 0.589919,
+2 it: 0.451095,
+3 it: 0.324805,
+4 it: 0.236384,
+5 it: 0.171015,
+6 it: 0.112128,
+7 it: 0.0739803,
+8 it: 0.0529356,
+9 it: 0.0355559,
+10 it: 0.0226786,
+11 it: 0.0142601,
+12 it: 0.00774855,
+13 it: 0.00528578,
+14 it: 0.00322192,
+15 it: 0.00162223,
+16 it: 0.000893594,
+
+Время решения GMRES: 26983
+total iterations: 16
+tolerance: 0.001
+total error: 0.000893594
+Info: 0
+GMRES without precond
+1000
+1 it: 0.589933,
+2 it: 0.451113,
+3 it: 0.324805,
+4 it: 0.236387,
+5 it: 0.171018,
+6 it: 0.112132,
+7 it: 0.0739822,
+8 it: 0.0529324,
+9 it: 0.0355544,
+10 it: 0.0226744,
+11 it: 0.0142294,
+12 it: 0.00737481,
+13 it: 0.00343299,
+14 it: 0.00166878,
+15 it: 0.000786989,
+
+Время решения GMRES: 286196
+total iterations: 15
+tolerance: 0.001
+total error: 0.000786989
+Info: 0
+FULL_SOL vs SKELETON_SOL = 0.00062199
+Full matrix memory usage: 549.316 Gb
+Toeplitz matrix memory usage: 3.76776 Gb
+Toeplitz and compressed matrix memory usage: 0.167055 Gb
+Profit with toeplitz: 145.794
+Profit with toeplitz and compressed: 3288.23
+Мозаичный ранг = 58
