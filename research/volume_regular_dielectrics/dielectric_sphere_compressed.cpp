@@ -48,14 +48,14 @@ int main() {
     openblas_set_num_threads(1);
     // 1. Рисуем сетку
     constexpr Types::scalar cube_length = 1;
-    constexpr Types::index Nx = 61;
-    constexpr Types::index Ny = 61;
-    constexpr Types::index Nz = 61;
+    constexpr Types::index Nx = 21;
+    constexpr Types::index Ny = 21;
+    constexpr Types::index Nz = 21;
     constexpr Types::scalar mesh_one_axis_size = cube_length / (Nx - 1);
     Mesh::VolumeMesh::CubeMeshWithData mesh{Types::point_t{-cube_length / 2, -cube_length / 2, -cube_length / 2},
                                             (Nx - 1) * mesh_one_axis_size,
                                             (Ny - 1) * mesh_one_axis_size, (Nz - 1) * mesh_one_axis_size, Nx, Ny, Nz};
-    mesh.setName("sphere_31");
+    mesh.setName("sphere_21");
     const Types::scalar cube_measure = mesh.dx() * mesh.dy() * mesh.dz();
     const Types::scalar basis_fn_module = 1. / sqrt(cube_measure);
     // Настраиваем диэлектрическую проницаемость
@@ -73,9 +73,16 @@ int main() {
     // Поправляем правую часть
     Types::VectorXc b = rhs * basis_fn_module;
 
-    // 4. Галеркинская проекция оператора
+    // 4. Галеркинская проекция оператора (две матрицы: точная и апроксимированная)
+    size_t nx, ny, nz;
+    nx = 5;
+    ny = 5;
+    nz = 5;
     Operators::Volume::operator_K_over_cube_mesh operator_K{k, mesh};
-    auto mat_compressed = operator_K.compute_galerkin_matrix(basis_fn_module);
+    auto [mat_compressed, perm] = operator_K.
+        compute_galerkin_matrix_custom_blocksize_compressed(nx, ny, nz, basis_fn_module, 1e-4);
+    // Сразу модифицируем правую часть (матрица перестановки)
+    b = perm * b;
     // Собираем матрицу (eps - 1) как вектор из значений
     Types::VectorXc diag_eps = Types::VectorXc::Zero(3 * mesh.getCells().size());
     const auto eps_data = mesh.getScalarData("eps");
@@ -84,13 +91,27 @@ int main() {
         diag_eps[3 * idx + 1] = eps_data[idx] - 1.;
         diag_eps[3 * idx + 2] = eps_data[idx] - 1.;
     }
+    // И его тоже переставляем
+    diag_eps = perm * diag_eps;
 
     Math::LinAgl::Matrix::Wrappers::VolumeOperatorMatrixReplacement A_compressed{mat_compressed, diag_eps};
+
+    // 5. Проводим анализ матрицы
+    std::cout << Utils::get_memory_usage(mat_compressed) << std::endl;
+    std::cout << "Мозаичный ранг = " << Utils::get_elements_for_parametrization(mat_compressed) /
+        mat_compressed.cols() << std::endl;
 
     // 6. Решаем системы
     // Поправляем правую часть по маске из фиктивных элементов
     b = A_compressed.modify_rhs_according_to_mask(b);
-    auto solution = Research::solve<Eigen::GMRES>(A_compressed, b, 400, 1e-3);
+    auto solution_full = Research::solve<Eigen::GMRES>(A_compressed, b, 400, 1e-3);
+    //    auto solution_compressed = Research::solve<Eigen::GMRES>(A_full, b, 1000, 1e-3);
+    // Смотрим относительную норму ошибки в решении
+    //    std::cout << "FULL_SOL vs SKELETON_SOL = " << (solution_full - solution_compressed).norm() / solution_full.norm() <<
+    //        std::endl;
+
+    // И теперь переставляем обратно
+    const Types::VectorXc solution = perm.transpose() * solution_full;
 
     // 7. Преобразовываем в векторное поле на ячейках и пишем в данные сетки
     std::vector<Types::Vector3c> field_on_mesh;
@@ -136,3 +157,14 @@ int main() {
     Utils::to_csv(phis_degree, rsp_hh, "angle", "rsp", rsp_hh_file);
 
 };
+
+// Надо сделать:
+// 2) Попробовать убрать единицу из множителя (eps-1) для хорошей обусловленности.
+//    Ну с корнем идея сработала, но кажется, что здесь справится диагональный предобуславливатель.
+
+// Наблюдения:
+// 1. если честно считать eps на кубах, то количество итераций GMRES учаличивается в 2-2.5 раза
+//    при этом если делать через домножение на корень, то количество итераций расчет не сильно.
+//    Пример: eps = 2, r = 0.25, freq = 1 GHz.
+//
+// 2.

@@ -21,12 +21,13 @@
 #include "Preconditioning.hpp"
 
 #include "math/fields/Utils.hpp"
-#include "math/integration/decart/GaussLegenderPoints.hpp"
+#include "math/integration/decart/Integration.hpp"
+#include "math/fourier/TripleToeplitz3x3Fourier.hpp"
 
 #include "Utils.hpp"
 
+
 #include <iostream>
-#include <math/integration/decart/Integration.hpp>
 
 using namespace EMW;
 
@@ -37,25 +38,19 @@ Types::scalar homo_sphere(const Types::point_t &x) {
     return x.norm() < SPHERE_RADUIS ? 2.56 : 1;
 }
 
-Types::scalar permittivity_distribution_cube(const Types::point_t &x) {
-    return 3 * ((std::abs(x.x()) < CUBE_LENGTH / 2) &&
-                (std::abs(x.y()) < CUBE_LENGTH / 2) &&
-                (std::abs(x.z()) < CUBE_LENGTH / 2)) + 1;
-}
-
 int main() {
     Eigen::setNbThreads(1);
     openblas_set_num_threads(1);
     // 1. Рисуем сетку
     constexpr Types::scalar cube_length = 1;
-    constexpr Types::index Nx = 61;
-    constexpr Types::index Ny = 61;
-    constexpr Types::index Nz = 61;
+    constexpr Types::index Nx = 41;
+    constexpr Types::index Ny = 41;
+    constexpr Types::index Nz = 41;
     constexpr Types::scalar mesh_one_axis_size = cube_length / (Nx - 1);
     Mesh::VolumeMesh::CubeMeshWithData mesh{Types::point_t{-cube_length / 2, -cube_length / 2, -cube_length / 2},
                                             (Nx - 1) * mesh_one_axis_size,
                                             (Ny - 1) * mesh_one_axis_size, (Nz - 1) * mesh_one_axis_size, Nx, Ny, Nz};
-    mesh.setName("sphere_31");
+    mesh.setName("sphere_41");
     const Types::scalar cube_measure = mesh.dx() * mesh.dy() * mesh.dz();
     const Types::scalar basis_fn_module = 1. / sqrt(cube_measure);
     // Настраиваем диэлектрическую проницаемость
@@ -76,6 +71,11 @@ int main() {
     // 4. Галеркинская проекция оператора
     Operators::Volume::operator_K_over_cube_mesh operator_K{k, mesh};
     auto mat_compressed = operator_K.compute_galerkin_matrix(basis_fn_module);
+
+    using fourier_t = Math::Fourier::TripleToeplitz3x3Fourier<Types::complex_d>;
+
+    auto fourier = fourier_t(mat_compressed);
+
     // Собираем матрицу (eps - 1) как вектор из значений
     Types::VectorXc diag_eps = Types::VectorXc::Zero(3 * mesh.getCells().size());
     const auto eps_data = mesh.getScalarData("eps");
@@ -85,12 +85,12 @@ int main() {
         diag_eps[3 * idx + 2] = eps_data[idx] - 1.;
     }
 
-    Math::LinAgl::Matrix::Wrappers::VolumeOperatorMatrixReplacement A_compressed{mat_compressed, diag_eps};
+    Math::LinAgl::Matrix::Wrappers::VolumeOperatorMatrixReplacement A_compressed{fourier, diag_eps};
 
     // 6. Решаем системы
     // Поправляем правую часть по маске из фиктивных элементов
     b = A_compressed.modify_rhs_according_to_mask(b);
-    auto solution = Research::solve<Eigen::GMRES>(A_compressed, b, 400, 1e-3);
+    auto solution = Research::solve<Eigen::GMRES>(A_compressed, b, 400, 1e-5);
 
     // 7. Преобразовываем в векторное поле на ячейках и пишем в данные сетки
     std::vector<Types::Vector3c> field_on_mesh;

@@ -45,6 +45,6 @@
 .idea
 research/*/cmake-build-debug
 research/*/cmake-build-release
-research/*/cmake-buidl-relwithdebinfo
+research/*/cmake-build-relwithdebinfo
 
 
