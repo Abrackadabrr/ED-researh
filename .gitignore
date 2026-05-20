@@ -49,6 +49,8 @@ research/*/cmake-build-relwithdebinfo
 
 # Research generated files
 *.csv
+*.vtu
+
 
 
 
