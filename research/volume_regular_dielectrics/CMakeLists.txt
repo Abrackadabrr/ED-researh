@@ -29,7 +29,8 @@ list(APPEND TASKS regular_cube.cpp
         dielectric_sphere.cpp
         spectrum_of_matrix.cpp
         dielectric_sphere_fft.cpp
-        adaptive_intergation_study.cpp)
+        adaptive_intergation_study.cpp
+        intergation_modes_study.cpp)
 
 foreach (TASK IN LISTS TASKS)
     get_filename_component(FILE_NAME ${TASK} NAME_WE)

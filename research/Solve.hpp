@@ -22,7 +22,7 @@ vector_t solve(const matrix_t &A, const vector_t &b, EMW::Types::index max_itera
     method.setMaxIterations(max_iterations);
     std::cout << method.maxIterations() << std::endl;
     method.setTolerance(tolerance);
-    method.set_restart(max_iterations);
+    method.set_restart(200);
 
     auto start = std::chrono::steady_clock::now();
 
