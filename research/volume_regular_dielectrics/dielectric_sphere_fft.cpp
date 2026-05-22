@@ -27,6 +27,7 @@
 #include "Utils.hpp"
 
 #include <iostream>
+#include <mesh/Utils.hpp>
 
 using namespace EMW;
 
@@ -40,9 +41,9 @@ int main() {
     openblas_set_num_threads(1);
     // 1. Рисуем сетку
     constexpr Types::scalar cube_length = 1;
-    constexpr Types::index Nx = 61;
-    constexpr Types::index Ny = 61;
-    constexpr Types::index Nz = 61;
+    constexpr Types::index Nx = 21;
+    constexpr Types::index Ny = 21;
+    constexpr Types::index Nz = 21;
     constexpr Types::scalar mesh_one_axis_size = cube_length / (Nx - 1);
     Mesh::VolumeMesh::CubeMeshWithData mesh{Types::point_t{-cube_length / 2, -cube_length / 2, -cube_length / 2},
                                             (Nx - 1) * mesh_one_axis_size,
@@ -58,7 +59,7 @@ int main() {
     mesh.smoothScalarData<DecartIntegration::GaussLegendre::Quadrature<2, 2, 2>>("eps", homo_sphere);
 
     // 2. Параметры падающей волны
-    constexpr Types::scalar freq = 1; // GHz
+    constexpr Types::scalar freq = 0.3; // GHz
     constexpr Types::complex_d k{Physics::get_k_on_frquency(freq), 0.};
 
     Physics::planeWaveCase incident_field{Types::Vector3d{0, 1, 0}, k, Types::Vector3d{1, 0, 0}};
@@ -75,7 +76,7 @@ int main() {
     // 4. Галеркинская проекция оператора
     Operators::Volume::operator_K_over_cube_mesh operator_K{k, mesh};
     auto matrix = operator_K.compute_galerkin_matrix(basis_fn_module);
-#if 1
+
     using fourier_t = Math::Fourier::TripleToeplitz3x3FourierParallel<Types::complex_d>;
 
     auto fourier = fourier_t(matrix);
@@ -94,7 +95,7 @@ int main() {
     // 6. Решаем системы
     // Поправляем правую часть по маске из фиктивных элементов
     b = A_compressed.modify_rhs_according_to_mask(b);
-    auto solution = Research::solve<Eigen::GMRES>(A_compressed, b, 2000, 2e-4);
+    auto solution = Research::solve<Eigen::GMRES>(A_compressed, b, 2000, 1e-3);
 
     // 7. Преобразовываем в векторное поле на ячейках и пишем в данные сетки
     std::vector<Types::Vector3c> field_on_mesh;
@@ -112,6 +113,8 @@ int main() {
         "/home/evgen/Education/MasterDegree/thesis/ED-researh/research/volume_regular_dielectrics/";
     VTK::volume_mesh_withdata_snapshot(mesh, path);
 
+#define CALC_RSP 0
+#if CALC_RSP
     // 8. Расчситываем диаграмму направленности
     int N = 180;
     const auto get_tau_hh = [](Types::scalar phi) { return Types::Vector3d{std::cos(phi), 0, std::sin(phi)}; };
@@ -137,5 +140,24 @@ int main() {
     std::ofstream rsp_hh_file{path + "sigma_hh_" + std::to_string(Nx) + ".csv"};
     Utils::to_csv(phis_degree, rsp_vv, "angle", "rsp", rsp_vv_file);
     Utils::to_csv(phis_degree, rsp_hh, "angle", "rsp", rsp_hh_file);
+#endif
+
+#define CALC_FIELD 1
+#if CALC_FIELD
+    // 9. Считаем поле
+    const int N = 100;
+    const Types::scalar h = 0.04;
+    std::vector<Mesh::point_t> meshgrid;
+    meshgrid.reserve(N * N);
+    Mesh::Utils::cartesian_product_unevenXY(std::ranges::views::iota(0, N), std::ranges::views::iota(0, N),
+                                            std::back_inserter(meshgrid), N, N, h, h);
+    std::vector<Types::Vector3c> field; field.resize(meshgrid.size());
+
+#pragma omp parallel for num_threads(14)
+    for (size_t idx = 0; idx < meshgrid.size(); ++idx) {
+        field[idx] = operator_K.compute_arbitrary_point(meshgrid[idx], mesh.getVectorData("solution"));
+    }
+
+    VTK::field_in_points_snapshot({field}, {}, {"E"}, {}, meshgrid, "electric_filed_" + std::to_string(Nx) , path);
 #endif
 };

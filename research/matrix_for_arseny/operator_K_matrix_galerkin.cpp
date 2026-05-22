@@ -97,35 +97,9 @@ int main() {
                     for (size_t i1 = 0; i1 < Nx / nx; ++i1)
                         for (size_t j1 = 0; j1 < Nx / nx; ++j1) {
                             auto cur_block = matrix.get_block(i3, j3).get_block(i2, j2).get_block(i1, j1);
-                            for (size_t k3 = 0; k3 < nz; ++k3)
-                                for (size_t m3 = 0; m3 < nz; ++m3) {
-                                    size_t row_index_part_3 = k3 * nx * ny;
-                                    size_t col_index_part_3 = m3 * nx * ny;
-
-                                    for (size_t k2 = 0; k2 < ny; ++k2)
-                                        for (size_t m2 = 0; m2 < ny; ++m2) {
-                                            size_t row_index_part_2 = k2 * nx;
-                                            size_t col_index_part_2 = m2 * nx;
-
-                                            for (size_t k1 = 0; k1 < nx; ++k1)
-                                                for (size_t m1 = 0; m1 < nx; ++m1) {
-                                                    size_t row_index_part_1 = k1 * 1;
-                                                    size_t col_index_part_1 = m1 * 1;
-
-                                                    size_t bottom_matrix_index_row =
-                                                        row_index_part_1 + row_index_part_2 + row_index_part_3;
-                                                    size_t bottom_matrix_index_col =
-                                                        col_index_part_1 + col_index_part_2 + col_index_part_3;
-
-                                                    auto bottom_matrix_block = cur_block.block(
-                                                        bottom_matrix_index_row, bottom_matrix_index_col, 3, 3);
-                                                    for (size_t p = 0; p < 3; ++p)
-                                                        for (size_t q = 0; q < 3; ++q) {
-                                                            vectorized_matrix.push_back(bottom_matrix_block(p, q));
-                                                            counter++;
-                                                        }
-                                                }
-                                        }
+                            for (size_t k3 = 0; k3 < cur_block.rows(); ++k3)
+                                for (size_t m3 = 0; m3 < cur_block.cols(); ++m3) {
+                                    vectorized_matrix.push_back(cur_block(k3, m3));
                                 }
                         }
     std::cout << matrix.rows() * matrix.cols() << std::endl;
