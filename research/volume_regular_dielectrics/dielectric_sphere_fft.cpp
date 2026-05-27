@@ -5,6 +5,7 @@
 #include "EMW/types/Types.hpp"
 
 #include "mesh/volume_mesh/CubeMeshWithData.hpp"
+#include "mesh/Utils.hpp"
 
 #include "operators/volume/OperatorK.hpp"
 #include "operators/volume/ProjectorOnMesh.hpp"
@@ -27,7 +28,6 @@
 #include "Utils.hpp"
 
 #include <iostream>
-#include <mesh/Utils.hpp>
 
 using namespace EMW;
 
@@ -36,14 +36,19 @@ constexpr Types::scalar CUBE_LENGTH = 0.5;
 
 Types::scalar homo_sphere(const Types::point_t &x) { return x.norm() < SPHERE_RADUIS ? 2.56 : 1; }
 
+#define MATRIX_COMPARISON 0
+#define SYSTEM_SOLVING 1
+#define CALC_RSP 1
+#define CALC_FIELD 0
+
 int main() {
     Eigen::setNbThreads(1);
     openblas_set_num_threads(1);
     // 1. Рисуем сетку
     constexpr Types::scalar cube_length = 1;
-    constexpr Types::index Nx = 21;
-    constexpr Types::index Ny = 21;
-    constexpr Types::index Nz = 21;
+    constexpr Types::index Nx = 121;
+    constexpr Types::index Ny = 121;
+    constexpr Types::index Nz = 121;
     constexpr Types::scalar mesh_one_axis_size = cube_length / (Nx - 1);
     Mesh::VolumeMesh::CubeMeshWithData mesh{Types::point_t{-cube_length / 2, -cube_length / 2, -cube_length / 2},
                                             (Nx - 1) * mesh_one_axis_size,
@@ -56,10 +61,10 @@ int main() {
     const Types::scalar cube_measure = mesh.dx() * mesh.dy() * mesh.dz();
     const Types::scalar basis_fn_module = 1. / sqrt(cube_measure);
     // Настраиваем диэлектрическую проницаемость
-    mesh.smoothScalarData<DecartIntegration::GaussLegendre::Quadrature<2, 2, 2>>("eps", homo_sphere);
+    mesh.smoothScalarData<DecartIntegration::NewtonCotess::Quadrature<1, 1, 1>>("eps", homo_sphere);
 
     // 2. Параметры падающей волны
-    constexpr Types::scalar freq = 0.3; // GHz
+    constexpr Types::scalar freq = 1; // GHz
     constexpr Types::complex_d k{Physics::get_k_on_frquency(freq), 0.};
 
     Physics::planeWaveCase incident_field{Types::Vector3d{0, 1, 0}, k, Types::Vector3d{1, 0, 0}};
@@ -75,8 +80,20 @@ int main() {
 
     // 4. Галеркинская проекция оператора
     Operators::Volume::operator_K_over_cube_mesh operator_K{k, mesh};
+    operator_K.set_tolerances(1e-8, 1e-23);
+    operator_K.set_adaptive_integration_max_levels({40, 20, 20, 10});
     auto matrix = operator_K.compute_galerkin_matrix(basis_fn_module);
+    std::cout << "Matrix sizes: " << matrix.cols() << ' ' << matrix.rows() << std::endl;
 
+#if MATRIX_COMPARISON
+    operator_K.set_adaptive_integration_max_levels({80, 40, 40, 20});
+    auto matrix_2 = operator_K.compute_galerkin_matrix(basis_fn_module);
+
+    auto rel_err = Utils::relative_frobenius_error(matrix, matrix_2);
+    std::cout << "Relative error in matrixies = " << rel_err << std::endl;
+#endif
+
+#if SYSTEM_SOLVING
     using fourier_t = Math::Fourier::TripleToeplitz3x3FourierParallel<Types::complex_d>;
 
     auto fourier = fourier_t(matrix);
@@ -95,7 +112,7 @@ int main() {
     // 6. Решаем системы
     // Поправляем правую часть по маске из фиктивных элементов
     b = A_compressed.modify_rhs_according_to_mask(b);
-    auto solution = Research::solve<Eigen::GMRES>(A_compressed, b, 2000, 1e-3);
+    auto solution = Research::solve<Eigen::GMRES>(A_compressed, b, 10000, 1e-3);
 
     // 7. Преобразовываем в векторное поле на ячейках и пишем в данные сетки
     std::vector<Types::Vector3c> field_on_mesh;
@@ -112,11 +129,11 @@ int main() {
     const std::string path =
         "/home/evgen/Education/MasterDegree/thesis/ED-researh/research/volume_regular_dielectrics/";
     VTK::volume_mesh_withdata_snapshot(mesh, path);
+#endif
 
-#define CALC_RSP 0
 #if CALC_RSP
     // 8. Расчситываем диаграмму направленности
-    int N = 180;
+    int N = 360;
     const auto get_tau_hh = [](Types::scalar phi) { return Types::Vector3d{std::cos(phi), 0, std::sin(phi)}; };
     const auto get_tau_vv = [](Types::scalar phi) { return Types::Vector3d{std::cos(phi), std::sin(phi), 0}; };
 
@@ -142,7 +159,6 @@ int main() {
     Utils::to_csv(phis_degree, rsp_hh, "angle", "rsp", rsp_hh_file);
 #endif
 
-#define CALC_FIELD 1
 #if CALC_FIELD
     // 9. Считаем поле
     const int N = 100;

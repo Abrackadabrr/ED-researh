@@ -15,11 +15,6 @@ if (OPENMP_FOUND)
     message("OpenMP Found")
 endif ()
 
-find_package(Eigen3 REQUIRED NO_MODULE)
-if (EIGEN3_FOUND)
-    message("Eigen Found")
-endif ()
-
 set(TARGET_LIBS emw OpenMP::OpenMP_CXX)
 
 list(APPEND TASKS operator_K_matrix_galerkin.cpp)

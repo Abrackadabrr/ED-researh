@@ -26,6 +26,7 @@ endif ()
 set(TARGET_LIBS eigen OpenMP::OpenMP_CXX)  #  + OpenMP::OpenMP_CXX
 
 list(APPEND TASKS regular_cube.cpp
+        dielectic_sphere_analytical.cpp
         dielectric_sphere.cpp
         spectrum_of_matrix.cpp
         dielectric_sphere_fft.cpp

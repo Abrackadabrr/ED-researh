@@ -16,13 +16,13 @@
 namespace Research {
 
 template <template <typename, typename> typename method_t, typename matrix_t, typename vector_t>
-vector_t solve(const matrix_t &A, const vector_t &b, EMW::Types::index max_iterations, EMW::Types::scalar tolerance) {
+vector_t solve(const matrix_t &A, const vector_t &b, EMW::Types::index max_iterations, EMW::Types::scalar tolerance, EMW::Types::scalar restart_every = 30) {
     auto method = method_t<matrix_t, Eigen::IdentityPreconditioner>{};
     std::cout << "GMRES without precond" << std::endl;
     method.setMaxIterations(max_iterations);
     std::cout << method.maxIterations() << std::endl;
     method.setTolerance(tolerance);
-    method.set_restart(200);
+    method.set_restart(restart_every);
 
     auto start = std::chrono::steady_clock::now();
 
