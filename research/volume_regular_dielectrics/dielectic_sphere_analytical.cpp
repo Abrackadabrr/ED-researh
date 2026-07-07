@@ -47,6 +47,11 @@ int main() {
         "/home/evgen/Education/MasterDegree/thesis/ED-researh/research/volume_regular_dielectrics/";
     const std::string filename = "sphere_61_with_an_sol.vtu";
     auto mesh = VTK::volume_mesh_withdata_from_vtu(path + filename);
+    auto solution = mesh.getVectorData("solution");
+    for (auto&& val : solution) {
+        val = Math::Constants::i * val * 1.56;
+    }
+    mesh.setVectorData("solution_j", solution);
 
     // 2. Параметры падающей волны
     constexpr Types::scalar freq = 1; // GHz
@@ -57,9 +62,10 @@ int main() {
     std::cout << "lambda_0 / mesh.h = " << 2 * M_PI / (k.real() * mesh.dx()) << std::endl;
     std::cout << "lambda / mesh.h = " << 2 * M_PI / (2.56 * k.real() * mesh.dx()) << std::endl;
 
+
 #if CALC_RSP
 
-    for (auto&& solution_filed_name : std::vector<std::string>{"al_sol", "solution"}) {
+    for (auto&& solution_filed_name : std::vector<std::string>{"an_sol", "solution_j"}) {
         // 8. Расчситываем диаграмму направленности
         int N = 180;
         const auto get_tau_hh = [](Types::scalar phi) { return Types::Vector3d{std::cos(phi), 0, std::sin(phi)}; };
@@ -75,8 +81,9 @@ int main() {
 
 #pragma omp parallel for num_threads(14)
         for (auto &&[vvalue, hvalue, phi] : std::views::zip(rsp_vv, rsp_hh, phis)) {
-            vvalue = (std::log(ESA::calculateRSP_kahan(get_tau_vv(phi), k, solution_filed_name, mesh)));
-            hvalue = (std::log(ESA::calculateRSP_kahan(get_tau_hh(phi), k, solution_filed_name, mesh)));
+            auto pred_value = ESA::calculateRSP(get_tau_vv(phi), k, solution_filed_name, mesh);
+            vvalue = (std::log(pred_value));
+            hvalue = (std::log(ESA::calculateRSP(get_tau_hh(phi), k, solution_filed_name, mesh)));
         }
 
         auto degree_view = view | std::views::transform([&](Types::scalar phi) { return phi * 180 / M_PI; });

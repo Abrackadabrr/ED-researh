@@ -31,8 +31,8 @@ int main() {
     openblas_set_num_threads(1);
     // 1. Создаем одну полоску из кубов
     constexpr Types::scalar cube_length = 0.15; // размер маленького куба
-    constexpr Types::index Nx = 2;
-    constexpr Types::index Ny = 2;
+    constexpr Types::index Nx = 3;
+    constexpr Types::index Ny = 3;
     constexpr Types::index Nz = 100;
 
     Mesh::VolumeMesh::CubeMeshWithData cubes{
@@ -67,7 +67,7 @@ int main() {
     // Расчет взаимодействия в дальней зоне (интеграл со внесенной производной)
     std::cout << "// --------- Far zone interaction ------------- //" << std::endl;
 
-    for (size_t index = 1; index < Nz - 1; ++index) {
+    for (size_t index = Nz; index < 2 * Nz - 1; ++index) {
         const auto &k_corner = cubes.leftDownCorner(reference_index);
         const auto &p_corner = cubes.leftDownCorner(index);
 #if 0  // Quadrature choosing
@@ -100,10 +100,18 @@ int main() {
         std::cout << "Adaptive rel error between result and inf = " << (result_inf - result).norm() / result_inf.norm()
                   << std::endl;
 #endif
-        auto full_precise_res = operator_k.galerkin_block_for_cubes(reference_index, index);
+        const auto volume_res = operator_k.matrix_3_coef(reference_index, index);
+        Types::Matrix3c surface_res = -operator_k.matrix_2_coef(reference_index, index);
+        Types::Matrix3c full_precise_res = surface_res;
+        // и подправляем общую матрицу
+        full_precise_res(0, 0) += volume_res;
+        full_precise_res(1, 1) += volume_res;
+        full_precise_res(2, 2) += volume_res;
+
         auto full_far_zone_result = operator_k.far_zone_interaction(reference_index, index, 3);
-        std::cout << "Adaptive rel error between precise and inf = "
-                  << (full_precise_res - full_far_zone_result).norm() / full_precise_res.norm() << std::endl;
+        std::cout << index << std::endl;
+        std::cout << full_far_zone_result << std::endl;
+        std::cout << full_precise_res << std::endl;
     }
 #endif
 

@@ -9,6 +9,9 @@ set(EMW_USE_VTK_VISUALIZATION ON)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../Electromagnetic-Waves-Scattering
         ${CMAKE_CURRENT_BINARY_DIR}/Electromagnetic-Waves-Scattering)
 
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../scattnlay
+        ${CMAKE_CURRENT_BINARY_DIR}/scattnlay)
+
 # Setting some flags
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -flto")
 message(${CMAKE_CXX_FLAGS_RELEASE})
@@ -26,6 +29,7 @@ endif ()
 set(TARGET_LIBS eigen OpenMP::OpenMP_CXX)  #  + OpenMP::OpenMP_CXX
 
 list(APPEND TASKS regular_cube.cpp
+        jvie_dielectric_sphere_fft.cpp
         dielectic_sphere_analytical.cpp
         dielectric_sphere.cpp
         spectrum_of_matrix.cpp
@@ -39,6 +43,10 @@ foreach (TASK IN LISTS TASKS)
     add_executable(${EXE_NAME} ${TASK})
     message("TASK: ${EXE_NAME}")
     target_link_libraries(${EXE_NAME} PUBLIC emw emw_visual_vtk ${TARGET_LIBS})
+    if (FILE_NAME STREQUAL "dielectric_sphere_fft")
+        target_sources(${EXE_NAME} PRIVATE $<TARGET_OBJECTS:nmie_obj_dp>)
+        target_include_directories(${EXE_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../scattnlay/src)
+    endif ()
     #    target_compile_options(${EXE_NAME} PRIVATE -Wconversion)
     target_compile_definitions(${EXE_NAME} PUBLIC "OMP_NESTED=ON")
 endforeach ()

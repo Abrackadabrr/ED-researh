@@ -6,13 +6,12 @@
 #include "types/Types.hpp"
 #include "mesh/SurfaceMesh.hpp"
 #include "mesh/MeshTypes.hpp"
-#include "visualisation/VTKFunctions.hpp"
+#include "visualisation/include/VTKFunctions.hpp.hpp"
 #include "mesh/Parser.hpp"
 #include "slae_generation/MatrixGeneration.hpp"
 #include "math/MathConstants.hpp"
-#include "examples/pathes.hpp"
 #include "experiment/PhysicalCondition.hpp"
-#include "math/integration/gauss_quadrature/GaussLegenderPoints.hpp"
+#include "math/integration/decart/Integration.hpp"
 #include "mesh/Utils.hpp"
 #include "Utils.hpp"
 
@@ -35,8 +34,8 @@ using namespace EMW::Types;
 
 inline Types::Vector3c operatorK_in_point(const Math::SurfaceVectorField &field, const Types::complex_d k,
                                           const Mesh::point_t &point) {
-    return EMW::OperatorK::K1<DefiniteIntegrals::GaussLegendre::Quadrature<4, 4>>(point, k, field) +
-           EMW::OperatorK::K0<DefiniteIntegrals::GaussLegendre::Quadrature<4>>(point, k, field);
+    return EMW::OperatorK::K1<DecartIntegration::GaussLegendre::Quadrature<4, 4>>(point, k, field) +
+           EMW::OperatorK::K0<DecartIntegration::GaussLegendre::Quadrature<4>>(point, k, field);
 }
 
 inline Types::Vector3c getE_in_point(const Math::SurfaceVectorField &j_e, const Types::complex_d k,
@@ -49,22 +48,23 @@ inline Types::Vector3c getE_in_point(const Math::SurfaceVectorField &j_e, const 
 
 
 int main() {
-    const std::string nodesFile = "/home/evgen/Education/MasterDegree/thesis/Electromagnetic-Waves-Scattering/meshes/plate/triangulated/1_1/nodes/1440_nodes.csv";
-    const std::string cellsFile = "/home/evgen/Education/MasterDegree/thesis/Electromagnetic-Waves-Scattering/meshes/plate/triangulated/1_1/cells/2742_cells.csv";
+    const std::string path_to_meshes = "/home/evgen/Education/MasterDegree/thesis/ED-researh/meshes/sphere/tri";
+    const std::string nodesFile = path_to_meshes + "412_nodes.csv";
+    const std::string cellsFile = path_to_meshes + "820_cells.csv";
 
     const auto parser_out = EMW::Parser::parse_mesh_without_tag(nodesFile, cellsFile);
     auto mesh_base = Mesh::SurfaceMesh{parser_out.nodes, parser_out.cells};
-    mesh_base.setName("Plane");
+    mesh_base.setName("test_sphere");
 
     // физика
-    const Types::scalar lambda = 0.5;
+    const Types::scalar lambda = 1;
     const Types::complex_d k{2 * Math::Constants::PI<scalar>() / lambda, 0};
     std::cout << k.real() << std::endl;
     // расчет матрицы системы
     const MatrixXc A = EMW::Matrix::getMatrixK(k, mesh_base);
 
     // цикл по векторам правой части
-    int samples = 180;
+    int samples = 1;
     Containers::vector_d esas;
     esas.resize(samples);
     Containers::vector_d angles;
@@ -89,7 +89,7 @@ int main() {
         const auto E_0_field = Math::SurfaceVectorField{mesh_base, [&physics](const Mesh::point_t& p) {return physics.value(p);}};
         const auto b = -E_0_field.asVector();
         // решаем СЛАУ
-        const auto j_vec = Research::solve<Eigen::GMRES>(A, b, 2000, 1e-2);
+        const auto j_vec = Research::solve<Eigen::GMRES>(A, b, 2000, 1e-5);
         // закидываем ток как поле на поверхности
         const Math::SurfaceVectorField j_e = Math::SurfaceVectorField::TangentField(mesh_base, j_vec, "j_e");
 
