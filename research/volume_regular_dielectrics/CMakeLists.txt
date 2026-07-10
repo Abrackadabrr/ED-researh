@@ -28,14 +28,17 @@ endif ()
 
 set(TARGET_LIBS eigen OpenMP::OpenMP_CXX)  #  + OpenMP::OpenMP_CXX
 
-list(APPEND TASKS regular_cube.cpp
+list(APPEND TASKS
+        regular_cube.cpp
         jvie_dielectric_sphere_fft.cpp
         dielectic_sphere_analytical.cpp
         dielectric_sphere.cpp
         spectrum_of_matrix.cpp
         dielectric_sphere_fft.cpp
         adaptive_intergation_study.cpp
-        intergation_modes_study.cpp)
+        intergation_modes_study.cpp
+        strong_scalability_test.cpp
+)
 
 foreach (TASK IN LISTS TASKS)
     get_filename_component(FILE_NAME ${TASK} NAME_WE)

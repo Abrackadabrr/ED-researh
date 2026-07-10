@@ -44,9 +44,9 @@ Types::scalar homo_sphere(const Types::point_t &x) { return x.norm() < SPHERE_RA
 
 #define MATRIX_COMPARISON 0
 #define SYSTEM_SOLVING 1
-#define CALC_RSP 1
+#define CALC_RSP 0
 #define CALC_FIELD 0
-#define ANALYTICAL_CHECK 1
+#define ANALYTICAL_CHECK 0
 
 std::vector<Types::Vector3c> calculate_analytical_solution(const Mesh::VolumeMesh::CubeMeshWithData &mesh,
                                                            Types::scalar sphere_radius, Types::complex_d epsilon,
@@ -141,8 +141,8 @@ int main() {
     openblas_set_num_threads(1);
     // 1. Рисуем сетку
     constexpr Types::scalar cube_length = 2 * SPHERE_RADUIS;
-    constexpr Types::index Nx_start = 11;
-    constexpr Types::index Nx_end = 12;
+    constexpr Types::index Nx_start = 6;
+    constexpr Types::index Nx_end = 7;
     for (Types::index Nx = Nx_start; Nx < Nx_end; Nx+=20) {
         const Types::index Ny = Nx;
         const Types::index Nz = Nx;
@@ -179,7 +179,7 @@ int main() {
         // 4. Галеркинская проекция оператора
         Operators::Volume::operator_K_over_cube_mesh operator_K{k, mesh};
         operator_K.set_tolerances(1e-6, 1e-21);
-        operator_K.set_adaptive_integration_max_levels({10, 10, 10, 10});
+        operator_K.set_adaptive_integration_max_levels({1, 1, 1, 1});
         auto matrix = operator_K.compute_galerkin_matrix(basis_fn_module);
         std::cout << "Matrix sizes: " << matrix.cols() << ' ' << matrix.rows() << std::endl;
 
@@ -227,7 +227,7 @@ int main() {
         // 6. Решаем системы
         // Поправляем правую часть по маске из фиктивных элементов
         b = A_compressed.modify_rhs_according_to_mask(b);
-        auto solution = Research::solve<Eigen::GMRES>(A_compressed, b, 10000, 1e-5);
+        auto solution = Research::solve<Eigen::GMRES>(A_compressed, b, 10000, 1e-5, 1000);
 
         // 7. Преобразовываем в векторное поле на ячейках и пишем в данные сетки
         std::vector<Types::Vector3c> field_on_mesh;
@@ -280,7 +280,7 @@ int main() {
             value = 10 * std::log10(value);
         }
 
-#pragma omp parallel for num_threads(14)
+#pragma omp parallel for
         for (auto &&[vvalue, hvalue, an_vvalue, an_hvalue, phi] :
              std::views::zip(rsp_vv, rsp_hh, an_rsp_vv, an_rsp_hh, phis)) {
             vvalue = (10 * std::log10(ESA::calculateRSP_kahan(get_tau_vv(phi), {k.real(), 0.}, "solution", mesh)));
@@ -317,7 +317,7 @@ int main() {
                                                 std::back_inserter(meshgrid), N, N, h, h);
         std::vector<Types::Vector3c> field; field.resize(meshgrid.size());
 
-#pragma omp parallel for num_threads(14)
+#pragma omp parallel for
         for (size_t idx = 0; idx < meshgrid.size(); ++idx) {
             field[idx] = operator_K.compute_arbitrary_point(meshgrid[idx], mesh.getVectorData("solution"));
         }
