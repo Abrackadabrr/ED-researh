@@ -6,6 +6,12 @@ set(CMAKE_CXX_STANDARD 23)
 # Some flags related to visualization
 set(EMW_USE_VTK_VISUALIZATION ON)
 
+set(TARGET_LIBS emw eigen OpenMP::OpenMP_CXX)
+
+if (EMW_USE_VTK_VISUALIZATION)
+    list(APPEND TARGET_LIBS emw_visual_vtk)
+endif ()
+
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../Electromagnetic-Waves-Scattering
         ${CMAKE_CURRENT_BINARY_DIR}/Electromagnetic-Waves-Scattering)
 
@@ -26,8 +32,6 @@ if (EIGEN3_FOUND)
     message("Eigen Found")
 endif ()
 
-set(TARGET_LIBS eigen OpenMP::OpenMP_CXX)  #  + OpenMP::OpenMP_CXX
-
 list(APPEND TASKS
         regular_cube.cpp
         jvie_dielectric_sphere_fft.cpp
@@ -38,6 +42,7 @@ list(APPEND TASKS
         adaptive_intergation_study.cpp
         intergation_modes_study.cpp
         strong_scalability_test.cpp
+        cluster_sphere.cpp
 )
 
 foreach (TASK IN LISTS TASKS)
@@ -45,11 +50,9 @@ foreach (TASK IN LISTS TASKS)
     set(EXE_NAME ${PROJECT_NAME}_${FILE_NAME})
     add_executable(${EXE_NAME} ${TASK})
     message("TASK: ${EXE_NAME}")
-    target_link_libraries(${EXE_NAME} PUBLIC emw emw_visual_vtk ${TARGET_LIBS})
-    if (FILE_NAME STREQUAL "dielectric_sphere_fft")
-        target_sources(${EXE_NAME} PRIVATE $<TARGET_OBJECTS:nmie_obj_dp>)
-        target_include_directories(${EXE_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../scattnlay/src)
-    endif ()
+    target_link_libraries(${EXE_NAME} PUBLIC ${TARGET_LIBS})
+    target_sources(${EXE_NAME} PRIVATE $<TARGET_OBJECTS:nmie_obj_dp>)
+    target_include_directories(${EXE_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../scattnlay/src)
     #    target_compile_options(${EXE_NAME} PRIVATE -Wconversion)
     target_compile_definitions(${EXE_NAME} PUBLIC "OMP_NESTED=ON")
 endforeach ()
