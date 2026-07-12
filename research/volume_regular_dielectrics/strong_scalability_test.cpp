@@ -48,7 +48,9 @@ int main() {
     operator_k.set_tolerances(rTol, aTol);
     operator_k.set_adaptive_integration_max_levels({lev_2d, lev_3d, lev_4d, lev_6d});
 
-    for (int n = 1; n < 13; n++) {
+    std::cout << "Mam threads available: " << omp_get_num_threads() << std::endl;
+
+    for (int n = 1; n < omp_get_max_threads(); n++) {
         omp_set_num_threads(n);
         auto warming_result = operator_k.compute_galerkin_matrix(basis_fn_module);
         auto start = std::chrono::high_resolution_clock::now();
