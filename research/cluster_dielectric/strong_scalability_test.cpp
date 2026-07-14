@@ -16,20 +16,18 @@
 using namespace EMW;
 
 constexpr static Types::scalar SPHERE_RADUIS = 0.5;
-constexpr static Types::scalar CUBE_LENGTH = 0.5;
-constexpr static Types::scalar SPHERE_EPSILON = 2.56;
 constexpr static Types::scalar cube_length = 2 * SPHERE_RADUIS;
 
 int main() {
-    constexpr Types::index Nx = 81;
+    constexpr Types::index Nx = 11;
     constexpr Types::scalar freq = 0.3; // GHz
-    constexpr Types::scalar rTol = 1e-3;
-    constexpr Types::scalar aTol = 1e-21;
-    constexpr Types::index lev_2d = 1;
-    constexpr Types::index lev_3d = 1;
-    constexpr Types::index lev_4d = 1;
-    constexpr Types::index lev_6d = 1;
-    constexpr Types::index nearness_trh = 100;
+    constexpr Types::scalar rTol = 1e-5;
+    constexpr Types::scalar aTol = 1e-20;
+    constexpr Types::index lev_2d = 10;
+    constexpr Types::index lev_3d = 7;
+    constexpr Types::index lev_4d = 5;
+    constexpr Types::index lev_6d = 3 ;
+    constexpr Types::index nearness_trh = 2;
     // 1. Сбор сетки
     Eigen::setNbThreads(1);
     const Types::index Ny = Nx;
@@ -48,11 +46,11 @@ int main() {
     operator_k.set_tolerances(rTol, aTol);
     operator_k.set_adaptive_integration_max_levels({lev_2d, lev_3d, lev_4d, lev_6d});
 
-    std::cout << "Mam threads available: " << omp_get_num_threads() << std::endl;
+    std::cout << "Maх threads available: " << omp_get_max_threads() << std::endl;
 
-    for (int n = 1; n < omp_get_max_threads(); n++) {
+    for (int n = 1; n < 17; n++) {
         omp_set_num_threads(n);
-        auto warming_result = operator_k.compute_galerkin_matrix(basis_fn_module);
+        // auto warming_result = operator_k.compute_galerkin_matrix(basis_fn_module);
         auto start = std::chrono::high_resolution_clock::now();
         auto result = operator_k.compute_galerkin_matrix(basis_fn_module);
         auto end = std::chrono::high_resolution_clock::now();

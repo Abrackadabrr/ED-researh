@@ -2,10 +2,6 @@
 // Created by evgen on 10.07.2026.
 //
 
-//
-// Created by evgen on 22.03.2026.
-//
-
 #include "EMW/types/Types.hpp"
 
 #include "mesh/Utils.hpp"
@@ -18,8 +14,6 @@
 #include "experiment/PhysicalCondition.hpp"
 
 #include "../Solve.hpp"
-
-#include "visualisation/include/VTKFunctions.hpp"
 
 #include "MatrixReplacement.hpp"
 #include "MatrixTraits.hpp"
@@ -39,16 +33,6 @@
 #include <vector>
 
 using namespace EMW;
-
-Types::scalar homo_sphere(const Types::point_t &x) { return x.norm() < SPHERE_RADUIS ? SPHERE_EPSILON : 1; }
-
-#define MATRIX_COMPARISON 0
-#define SYSTEM_SOLVING 1
-#define CALC_RSP 1
-#define CALC_FIELD 0
-#define ANALYTICAL_CHECK 0
-
-constexpr Types::scalar SPHERE_RADUIS = 0.5;
 
 std::vector<Types::Vector3c> calculate_analytical_solution(const Mesh::VolumeMesh::CubeMeshWithData &mesh,
                                                            Types::scalar sphere_radius, Types::complex_d epsilon,
@@ -86,7 +70,7 @@ std::vector<Types::Vector3c> calculate_analytical_solution(const Mesh::VolumeMes
     std::vector<Types::Vector3c> field_on_mesh;
     field_on_mesh.reserve(total_points);
     for (size_t idx = 0; idx < total_points; ++idx) {
-        if (cells[idx].center_.norm() < SPHERE_RADUIS)
+        if (cells[idx].center_.norm() < sphere_radius)
             field_on_mesh.emplace_back(E[idx][0], E[idx][1], E[idx][2]);
         else
             field_on_mesh.emplace_back(Types::Vector3c::Zero());
@@ -142,10 +126,14 @@ int main() {
     Eigen::setNbThreads(1);
     // характеритики сферы
     constexpr Types::scalar SPHERE_EPSILON = 2.56;
+    constexpr Types::scalar SPHERE_RADUIS = 0.5;
+    const auto homo_sphere = [SPHERE_RADUIS, SPHERE_EPSILON](const Types::point_t &x) {
+        return x.norm() < SPHERE_RADUIS ? SPHERE_EPSILON : 1;
+    };
     // параметры сетки
     constexpr Types::scalar cube_length = 2 * SPHERE_RADUIS;
     constexpr Types::index Nx_start = 6;
-    constexpr Types::index Nx_end = 7;
+    constexpr Types::index Nx_end = 30;
     // настройки для расчета оператора
     constexpr Types::scalar rTol = 1e-3;
     constexpr Types::scalar aTol = 1e-21;
@@ -154,8 +142,11 @@ int main() {
     constexpr Types::index lev_4d = 1;
     constexpr Types::index lev_6d = 1;
     constexpr Types::index nearness_trh = 2;
-    // частота падающего излучения
+    // параметры падающего излучения
     constexpr Types::scalar freq = 0.3; // GHz
+    constexpr Types::complex_d k{Physics::get_k_on_frquency(freq), 0.0};
+    constexpr Types::Vector3d polarization{1, 0, 0};
+    constexpr Types::Vector3d k_vector{0, 0, -1};
     // путь для сохранения результатов
     const std::string path = "./";
 
@@ -179,9 +170,7 @@ int main() {
         mesh.smoothScalarData<DecartIntegration::NewtonCotess::Quadrature<4, 4, 4>>("eps", homo_sphere);
 
         // 2. Параметры падающей волны
-        constexpr Types::complex_d k{Physics::get_k_on_frquency(freq), 0.0};
-
-        Physics::planeWaveCase incident_field{Types::Vector3d{1, 0, 0}, {k.real(), 0.}, Types::Vector3d{0, 0, -1}};
+        Physics::planeWaveCase incident_field{polarization, k, k_vector};
         std::cout << "Длина волны в свободном пространстве = " << 2 * M_PI / k.real() << std::endl;
         std::cout << "lambda_0 / mesh.h = " << 2 * M_PI / (k.real() * cube_length / (Nx - 1)) << std::endl;
         std::cout << "lambda / mesh.h = " << 2 * M_PI / (SPHERE_EPSILON * k.real() * cube_length / (Nx - 1))
@@ -223,15 +212,13 @@ int main() {
                 mask.block(3 * idx, 0, 3, 1) = Types::Vector3d::Ones();
         }
 
-        // Расчет аналитического решения на сфере
+        // 5. Расчет аналитического решения на сфере
         auto analytical_solution =
             calculate_analytical_solution(mesh, SPHERE_RADUIS, Types::complex_d{SPHERE_EPSILON, 0}, k);
         mesh.setVectorData("analytical_solution", std::move(analytical_solution));
 
-#if SYSTEM_SOLVING
-        Math::LinAgl::Matrix::Wrappers::VolumeOperatorMatrixReplacement A_compressed{fourier, diag_eps};
-
         // 6. Решаем системы
+        Math::LinAgl::Matrix::Wrappers::VolumeOperatorMatrixReplacement A_compressed{fourier, diag_eps};
         // Поправляем правую часть по маске из фиктивных элементов
         b = A_compressed.modify_rhs_according_to_mask(b);
         auto solution = Research::solve<Eigen::GMRES>(A_compressed, b, 10000, 1e-5, 1000);
@@ -246,9 +233,7 @@ int main() {
 
         // Добавляем поле
         mesh.setVectorData("solution", std::move(field_on_mesh));
-#endif
 
-#if CALC_RSP
         // 8. Расчситываем диаграмму направленности
         int N = 360;
         const auto get_tau_hh = [](Types::scalar phi) { return Types::Vector3d{std::sin(phi), 0, std::cos(phi)}; };
@@ -288,8 +273,6 @@ int main() {
         Utils::to_csv(phis_degree, rsp_hh, "angle", "rsp", rsp_hh_file);
         Utils::to_csv(phis_degree, an_rsp_vv, "angle", "rsp", an_rsp_vv_file);
         Utils::to_csv(phis_degree, an_rsp_hh, "angle", "rsp", an_rsp_hh_file);
-
-#endif
     }
 
     // референсный теоретический расчет

@@ -42,9 +42,9 @@ constexpr Types::scalar SPHERE_EPSILON = 2.56;
 
 Types::scalar homo_sphere(const Types::point_t &x) { return x.norm() < SPHERE_RADUIS ? SPHERE_EPSILON : 1; }
 
-#define MATRIX_COMPARISON 0
+#define MATRIX_COMPARISON 1
 #define SYSTEM_SOLVING 1
-#define CALC_RSP 0
+#define CALC_RSP 1
 #define CALC_FIELD 0
 #define ANALYTICAL_CHECK 0
 
@@ -73,8 +73,8 @@ std::vector<Types::Vector3c> calculate_analytical_solution(const Mesh::VolumeMes
         Zp[idx] = k0 * center.z();
     }
 
-    std::vector<std::vector<std::complex<double>>> E(total_points, std::vector<std::complex<double>>(3));
-    std::vector<std::vector<std::complex<double>>> H(total_points, std::vector<std::complex<double>>(3));
+    std::vector E(total_points, std::vector<std::complex<double>>(3));
+    std::vector H(total_points, std::vector<std::complex<double>>(3));
 
     // nField returns the full analytical field in Cartesian components: incident + scattered.
     const int nmax = nmie::nField(1, -1, layer_size, refractive_index, -1, nmie::Modes::kAll, nmie::Modes::kAll,
@@ -98,8 +98,8 @@ struct MieRSP {
     std::vector<Types::scalar> vv;
 };
 
-MieRSP calculate_mie_rsp(const std::vector<Types::scalar> &phis, Types::scalar sphere_radius,
-                         Types::complex_d epsilon, Types::complex_d wave_number) {
+MieRSP calculate_mie_rsp(const std::vector<Types::scalar> &phis, Types::scalar sphere_radius, Types::complex_d epsilon,
+                         Types::complex_d wave_number) {
     const Types::scalar k0 = wave_number.real();
 
     std::vector<double> layer_size{k0 * sphere_radius};
@@ -122,7 +122,6 @@ MieRSP calculate_mie_rsp(const std::vector<Types::scalar> &phis, Types::scalar s
 
     const int nmax = nmie::nMie(1, layer_size, refractive_index, static_cast<unsigned int>(theta.size()), theta, &Qext,
                                 &Qsca, &Qabs, &Qbk, &Qpr, &g, &Albedo, S1, S2);
-    std::cout << "Mie RSP nmax = " << nmax << std::endl;
 
     MieRSP rsp;
     rsp.hh.resize(phis.size());
@@ -132,28 +131,23 @@ MieRSP calculate_mie_rsp(const std::vector<Types::scalar> &phis, Types::scalar s
         rsp.vv[idx] = scale * std::norm(S1[idx]);
         rsp.hh[idx] = scale * std::norm(S2[idx]);
     }
-
+    std::cout << "Mie RSP nmax = " << nmax << std::endl;
     return rsp;
 }
 
 int main() {
     Eigen::setNbThreads(1);
-    openblas_set_num_threads(1);
     // 1. Рисуем сетку
     constexpr Types::scalar cube_length = 2 * SPHERE_RADUIS;
-    constexpr Types::index Nx_start = 6;
-    constexpr Types::index Nx_end = 7;
-    for (Types::index Nx = Nx_start; Nx < Nx_end; Nx+=20) {
+    constexpr Types::index Nx_start = 41;
+    constexpr Types::index Nx_end = 42;
+    for (Types::index Nx = Nx_start; Nx < Nx_end; Nx += 20) {
         const Types::index Ny = Nx;
         const Types::index Nz = Nx;
         const Types::scalar mesh_one_axis_size = cube_length / (Nx - 1);
-        Mesh::VolumeMesh::CubeMeshWithData mesh{Types::point_t{-cube_length / 2, -cube_length / 2, -cube_length / 2},
-                                                (Nx - 1) * mesh_one_axis_size,
-                                                (Ny - 1) * mesh_one_axis_size,
-                                                (Nz - 1) * mesh_one_axis_size,
-                                                Nx,
-                                                Ny,
-                                                Nz};
+        const auto minCorner = Types::point_t{-cube_length / 2, -cube_length / 2, -cube_length / 2};
+        Mesh::VolumeMesh::CubeMeshWithData mesh{minCorner, cube_length, cube_length, cube_length, Nx, Ny, Nz};
+
         mesh.setName("sphere_" + std::to_string(Nx));
         const Types::scalar cube_measure = mesh.dx() * mesh.dy() * mesh.dz();
         std::cout << cube_measure << std::endl;
@@ -162,7 +156,7 @@ int main() {
         mesh.smoothScalarData<DecartIntegration::NewtonCotess::Quadrature<4, 4, 4>>("eps", homo_sphere);
 
         // 2. Параметры падающей волны
-        constexpr Types::scalar freq = 1.; // GHz
+        constexpr Types::scalar freq = 1; // GHz
         constexpr Types::complex_d k{Physics::get_k_on_frquency(freq), 0.0};
 
         Physics::planeWaveCase incident_field{Types::Vector3d{1, 0, 0}, {k.real(), 0.}, Types::Vector3d{0, 0, -1}};
@@ -179,7 +173,9 @@ int main() {
         // 4. Галеркинская проекция оператора
         Operators::Volume::operator_K_over_cube_mesh operator_K{k, mesh};
         operator_K.set_tolerances(1e-6, 1e-21);
-        operator_K.set_adaptive_integration_max_levels({1, 1, 1, 1});
+        operator_K.set_adaptive_integration_max_levels({10, 10, 10, 10});
+        operator_K.set_nearness_threshold(2);
+        omp_set_num_threads(16);
         auto matrix = operator_K.compute_galerkin_matrix(basis_fn_module);
         std::cout << "Matrix sizes: " << matrix.cols() << ' ' << matrix.rows() << std::endl;
 
@@ -202,14 +198,17 @@ int main() {
                 mask.block(3 * idx, 0, 3, 1) = Types::Vector3d::Ones();
         }
 
-#if ANALYTICAL_CHECK
         // Расчет аналитического решения на сфере
-        auto analytical_solution = calculate_analytical_solution(
-            mesh, SPHERE_RADUIS, Types::complex_d{SPHERE_EPSILON, 0}, k);
+        auto analytical_solution =
+            calculate_analytical_solution(mesh, SPHERE_RADUIS, Types::complex_d{SPHERE_EPSILON, 0}, k);
         mesh.setVectorData("analytical_solution", std::move(analytical_solution));
         const auto an_sol = mesh.getVectorDataAsVector("analytical_solution");
-        //  и расчет невязки по построенной матрице
-        const auto residual = (an_sol - fourier.matvec(an_sol.cwiseProduct(diag_eps))).cwiseProduct(mask) / basis_fn_module - b.cwiseProduct(mask);
+
+#if ANALYTICAL_CHECK
+        //  Расчет невязки по построенной матрице
+        const auto residual =
+            (an_sol - fourier.matvec(an_sol.cwiseProduct(diag_eps))).cwiseProduct(mask) / basis_fn_module -
+            b.cwiseProduct(mask);
         std::cout << residual.norm() / b.norm() << std::endl;
 #endif
 
@@ -246,10 +245,13 @@ int main() {
         VTK::volume_mesh_withdata_snapshot(mesh, path);
 
 #if ANALYTICAL_CHECK
-        const Types::scalar phase_shift = std::arg(an_sol[3 * Nx * Ny * Nz / 2]) - std::arg(solution[3 * Nx * Ny * Nz / 2]);
+        const Types::scalar phase_shift =
+            std::arg(an_sol[3 * Nx * Ny * Nz / 2]) - std::arg(solution[3 * Nx * Ny * Nz / 2]);
         std::cout << "Phase shift: " << phase_shift << std::endl;
-        const Types::VectorXc solution_difference = std::exp(Math::Constants::i * phase_shift) * solution - an_sol.cwiseProduct(mask) / basis_fn_module;
-        std::cout << "solution difference relative norm = " << solution_difference.norm() / solution.norm() << std::endl;
+        const Types::VectorXc solution_difference =
+            std::exp(Math::Constants::i * phase_shift) * solution - an_sol.cwiseProduct(mask) / basis_fn_module;
+        std::cout << "solution difference relative norm = " << solution_difference.norm() / solution.norm()
+                  << std::endl;
 #endif
 
 #endif
@@ -285,14 +287,17 @@ int main() {
              std::views::zip(rsp_vv, rsp_hh, an_rsp_vv, an_rsp_hh, phis)) {
             vvalue = (10 * std::log10(ESA::calculateRSP_kahan(get_tau_vv(phi), {k.real(), 0.}, "solution", mesh)));
             hvalue = (10 * std::log10(ESA::calculateRSP_kahan(get_tau_hh(phi), {k.real(), 0.}, "solution", mesh)));
-            an_vvalue =
-                (10 * std::log10(ESA::calculateRSP_kahan(get_tau_vv(phi), {k.real(), 0.}, "analytical_solution", mesh)));
-            an_hvalue =
-                (10 * std::log10(ESA::calculateRSP_kahan(get_tau_hh(phi), {k.real(), 0.}, "analytical_solution", mesh)));
-             }
+            an_vvalue = (10 * std::log10(ESA::calculateRSP_kahan(get_tau_vv(phi), {k.real(), 0.}, "analytical_solution",
+                                                                 mesh)));
+            an_hvalue = (10 * std::log10(ESA::calculateRSP_kahan(get_tau_hh(phi), {k.real(), 0.}, "analytical_solution",
+                                                                 mesh)));
+        }
 
-        auto degree_view = view | std::views::transform([&](Types::scalar phi) { return phi * 180 / M_PI; });
+        auto degree_view = phis | std::views::transform([&](Types::scalar phi) { return phi * 180 / M_PI; });
         std::vector<Types::scalar> phis_degree{degree_view.begin(), degree_view.end()};
+
+        std::cout << "RCS calculated" << std::endl;
+
         std::ofstream rsp_vv_file{path + "sphere_sigma_vv_" + std::to_string(Nx) + ".csv"};
         std::ofstream rsp_hh_file{path + "sphere_sigma_hh_" + std::to_string(Nx) + ".csv"};
         std::ofstream an_rsp_vv_file{path + "an_sphere_sigma_vv_" + std::to_string(Nx) + ".csv"};
