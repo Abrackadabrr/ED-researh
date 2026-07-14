@@ -4,4 +4,4 @@
 	branch = dev
 [submodule "scattnlay"]
 	path = scattnlay
-	url = git@github.com:ovidiopr/scattnlay.git
+	url = https://github.com/ovidiopr/scattnlay.git
