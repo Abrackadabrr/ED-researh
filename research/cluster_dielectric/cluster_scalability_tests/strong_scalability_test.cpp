@@ -19,7 +19,7 @@ constexpr static Types::scalar SPHERE_RADUIS = 0.5;
 constexpr static Types::scalar cube_length = 2 * SPHERE_RADUIS;
 
 int main() {
-    constexpr Types::index Nx = 11;
+    constexpr Types::index Nx = 6;
     constexpr Types::scalar freq = 0.3; // GHz
     constexpr Types::scalar rTol = 1e-5;
     constexpr Types::scalar aTol = 1e-20;
