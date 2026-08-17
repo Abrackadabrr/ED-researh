@@ -20,7 +20,8 @@ vector_t solve(const matrix_t &A, const vector_t &b, EMW::Types::index max_itera
     auto method = method_t<matrix_t, Eigen::IdentityPreconditioner>{};
     std::cout << "GMRES without precond" << std::endl;
     method.setMaxIterations(max_iterations);
-    std::cout << method.maxIterations() << std::endl;
+    std::cout << "Max iterations " << method.maxIterations() << std::endl;
+    std::cout << "Restart every " << restart_every << std::endl;
     method.setTolerance(tolerance);
     method.set_restart(restart_every);
 

@@ -56,6 +56,24 @@ template <typename MatrixType1> struct traits<My::VolumeOperatorMatrixReplacemen
     };
 };
 
+template <typename MatrixType, typename RightPreconditionerType>
+struct traits<My::RightPreconditionedVolumeOperatorMatrixReplacement<MatrixType, RightPreconditionerType>> {
+    using Scalar = EMW::Types::complex_d;
+    using StorageIndex = EMW::Types::integer;
+    static constexpr EMW::Types::integer Options_ = 0;
+
+    using StorageKind = Sparse;
+    using XprKind = MatrixXpr;
+
+    enum {
+        RowsAtCompileTime = Dynamic,
+        ColsAtCompileTime = Dynamic,
+        MaxRowsAtCompileTime = Dynamic,
+        MaxColsAtCompileTime = Dynamic,
+        Flags = Options_ | NestByRefBit | LvalueBit | CompressedAccessBit,
+    };
+};
+
 template <typename MatrixType1> struct traits<My::SimpleVolumeOperator<MatrixType1>> {
     // Эти три вещи ниже должны зависеть от типа, который мы передаем в качестве MatrixType.
     // Но пока что это просто захардкожено

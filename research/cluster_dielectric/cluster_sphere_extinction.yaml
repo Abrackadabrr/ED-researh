@@ -1,0 +1,37 @@
+sphere:
+  relative_permittivity:
+    real: 2.56
+    imaginary: 0.0
+  radius_m: 0.5
+
+mesh:
+  # The wavelength criterion takes precedence when it requires a finer mesh.
+  min_cells_per_axis: 40
+  cells_per_internal_wavelength: 15.0
+
+frequency_sweep_ghz:
+  start: 0.9
+  end: 1.2
+  step: 0.02
+
+integration:
+  relative_tolerance: 1.0e-6
+  absolute_tolerance: 1.0e-21
+  level_2d: 3
+  level_3d: 3
+  level_4d: 2
+  level_6d: 2
+  nearness_threshold: 2
+
+incident_wave:
+  polarization: [1.0, 0.0, 0.0]
+  direction: [0.0, 0.0, -1.0]
+
+solver:
+  gmres:
+    max_iterations: 10000
+    tolerance: 1.0e-9
+    restart: 500
+
+output:
+  file: ./sphere_extinction_vs_frequency.csv

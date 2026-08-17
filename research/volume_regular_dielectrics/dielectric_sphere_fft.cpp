@@ -25,13 +25,13 @@
 #include "math/fourier/TripleToeplitz3x3Fourier.hpp"
 #include "math/integration/decart/Integration.hpp"
 
-#include "nmie.hpp"
-
+#include "../cluster_dielectric/analytical_solution/SphereMieAnalytical.hpp"
 #include "Utils.hpp"
 
-#include <complex>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
+#include <stdexcept>
 #include <vector>
 
 using namespace EMW;
@@ -46,102 +46,27 @@ Types::scalar homo_sphere(const Types::point_t &x) { return x.norm() < SPHERE_RA
 #define SYSTEM_SOLVING 1
 #define CALC_RSP 1
 #define CALC_FIELD 0
-#define ANALYTICAL_CHECK 0
-
-std::vector<Types::Vector3c> calculate_analytical_solution(const Mesh::VolumeMesh::CubeMeshWithData &mesh,
-                                                           Types::scalar sphere_radius, Types::complex_d epsilon,
-                                                           Types::complex_d wave_number) {
-    const auto &cells = mesh.getCells();
-    const size_t total_points = cells.size();
-    const Types::scalar k0 = wave_number.real();
-
-    // scattnlay works with dimensionless coordinates k0 * r and size parameter k0 * R.
-    std::vector<double> layer_size{k0 * sphere_radius};
-    // nField expects the refractive index of each layer, not the dielectric permittivity.
-    std::vector<std::complex<double>> refractive_index{std::sqrt(epsilon)};
-    std::vector<double> Xp(total_points);
-    std::vector<double> Yp(total_points);
-    std::vector<double> Zp(total_points);
-
-    // The canonical incident wave in scattnlay is E_inc = x_hat * exp(i * k0 * z):
-    // the wave vector is directed along +z, and the electric polarization is along +x.
-    // Therefore no coordinate rotation is applied here.
-    for (size_t idx = 0; idx < total_points; ++idx) {
-        const auto &center = cells[idx].center_;
-        Xp[idx] = k0 * center.x();
-        Yp[idx] = k0 * center.y();
-        Zp[idx] = k0 * center.z();
-    }
-
-    std::vector E(total_points, std::vector<std::complex<double>>(3));
-    std::vector H(total_points, std::vector<std::complex<double>>(3));
-
-    // nField returns the full analytical field in Cartesian components: incident + scattered.
-    const int nmax = nmie::nField(1, -1, layer_size, refractive_index, -1, nmie::Modes::kAll, nmie::Modes::kAll,
-                                  static_cast<unsigned int>(total_points), Xp, Yp, Zp, E, H);
-    std::cout << "Analytical solution nmax = " << nmax << std::endl;
-
-    std::vector<Types::Vector3c> field_on_mesh;
-    field_on_mesh.reserve(total_points);
-    for (size_t idx = 0; idx < total_points; ++idx) {
-        if (cells[idx].center_.norm() < SPHERE_RADUIS)
-            field_on_mesh.emplace_back(E[idx][0], E[idx][1], E[idx][2]);
-        else
-            field_on_mesh.emplace_back(Types::Vector3c::Zero());
-    }
-
-    return field_on_mesh;
-}
-
-struct MieRSP {
-    std::vector<Types::scalar> hh;
-    std::vector<Types::scalar> vv;
-};
-
-MieRSP calculate_mie_rsp(const std::vector<Types::scalar> &phis, Types::scalar sphere_radius, Types::complex_d epsilon,
-                         Types::complex_d wave_number) {
-    const Types::scalar k0 = wave_number.real();
-
-    std::vector<double> layer_size{k0 * sphere_radius};
-    std::vector<std::complex<double>> refractive_index{std::sqrt(epsilon)};
-    std::vector<double> theta;
-    theta.reserve(phis.size());
-    for (const auto phi : phis) {
-        theta.push_back(phi);
-    }
-
-    double Qext = 0;
-    double Qsca = 0;
-    double Qabs = 0;
-    double Qbk = 0;
-    double Qpr = 0;
-    double g = 0;
-    double Albedo = 0;
-    std::vector<std::complex<double>> S1;
-    std::vector<std::complex<double>> S2;
-
-    const int nmax = nmie::nMie(1, layer_size, refractive_index, static_cast<unsigned int>(theta.size()), theta, &Qext,
-                                &Qsca, &Qabs, &Qbk, &Qpr, &g, &Albedo, S1, S2);
-
-    MieRSP rsp;
-    rsp.hh.resize(phis.size());
-    rsp.vv.resize(phis.size());
-    const Types::scalar scale = 4.0 * M_PI / (k0 * k0);
-    for (size_t idx = 0; idx < phis.size(); ++idx) {
-        rsp.vv[idx] = scale * std::norm(S1[idx]);
-        rsp.hh[idx] = scale * std::norm(S2[idx]);
-    }
-    std::cout << "Mie RSP nmax = " << nmax << std::endl;
-    return rsp;
-}
+#define ANALYTICAL_CHECK 1
 
 int main() {
     Eigen::setNbThreads(1);
+    const std::string output_path =
+        "/home/evgen/Education/MasterDegree/thesis/ED-researh/research/volume_regular_dielectrics/";
+
+#if SYSTEM_SOLVING && ANALYTICAL_CHECK
+    std::ofstream convergence_file{output_path + "dielectric_sphere_fft_convergence.csv"};
+    if (!convergence_file) {
+        throw std::runtime_error("Failed to open dielectric-sphere convergence CSV file");
+    }
+    convergence_file << "cells_per_diameter,mie_discrete_residual,relative_l2_error,relative_c_error\n"
+                     << std::setprecision(17);
+#endif
+
     // 1. Рисуем сетку
     constexpr Types::scalar cube_length = 2 * SPHERE_RADUIS;
-    constexpr Types::index Nx_start = 41;
-    constexpr Types::index Nx_end = 42;
-    for (Types::index Nx = Nx_start; Nx < Nx_end; Nx += 20) {
+    constexpr Types::index Nx_start = 11;
+    constexpr Types::index Nx_end = 32;
+    for (Types::index Nx = Nx_start; Nx < Nx_end; Nx += 10) {
         const Types::index Ny = Nx;
         const Types::index Nz = Nx;
         const Types::scalar mesh_one_axis_size = cube_length / (Nx - 1);
@@ -153,16 +78,16 @@ int main() {
         std::cout << cube_measure << std::endl;
         const Types::scalar basis_fn_module = 1. / sqrt(cube_measure);
         // Настраиваем диэлектрическую проницаемость
-        mesh.smoothScalarData<DecartIntegration::NewtonCotess::Quadrature<4, 4, 4>>("eps", homo_sphere);
+        mesh.smoothScalarData<DecartIntegration::NewtonCotess::Quadrature<1, 1, 1>>("eps", homo_sphere);
 
         // 2. Параметры падающей волны
-        constexpr Types::scalar freq = 1; // GHz
+        constexpr Types::scalar freq = 0.3; // GHz
         constexpr Types::complex_d k{Physics::get_k_on_frquency(freq), 0.0};
 
         Physics::planeWaveCase incident_field{Types::Vector3d{1, 0, 0}, {k.real(), 0.}, Types::Vector3d{0, 0, -1}};
         std::cout << "Длина волны в свободном пространстве = " << 2 * M_PI / k.real() << std::endl;
         std::cout << "lambda_0 / mesh.h = " << 2 * M_PI / (k.real() * mesh_one_axis_size) << std::endl;
-        std::cout << "lambda / mesh.h = " << 2 * M_PI / (SPHERE_EPSILON * k.real() * mesh_one_axis_size) << std::endl;
+        std::cout << "lambda / mesh.h = " << 2 * M_PI / (std::sqrt(SPHERE_EPSILON) * k.real() * mesh_one_axis_size) << std::endl;
 
         // 3. Галеркинская проекция правой части
         Operators::Volume::ProjectorOnMesh proj{mesh};
@@ -173,7 +98,7 @@ int main() {
         // 4. Галеркинская проекция оператора
         Operators::Volume::operator_K_over_cube_mesh operator_K{k, mesh};
         operator_K.set_tolerances(1e-6, 1e-21);
-        operator_K.set_adaptive_integration_max_levels({10, 10, 10, 10});
+        operator_K.set_adaptive_integration_max_levels({7, 7, 5, 5});
         operator_K.set_nearness_threshold(2);
         omp_set_num_threads(16);
         auto matrix = operator_K.compute_galerkin_matrix(basis_fn_module);
@@ -199,21 +124,24 @@ int main() {
         }
 
         // Расчет аналитического решения на сфере
-        auto analytical_solution =
-            calculate_analytical_solution(mesh, SPHERE_RADUIS, Types::complex_d{SPHERE_EPSILON, 0}, k);
+        auto analytical_solution = Research::VolDie::Mie::calculate_field_on_mesh(
+            mesh, SPHERE_RADUIS, Types::complex_d{SPHERE_EPSILON, 0}, k);
         mesh.setVectorData("analytical_solution", std::move(analytical_solution));
         const auto an_sol = mesh.getVectorDataAsVector("analytical_solution");
 
 #if ANALYTICAL_CHECK
         //  Расчет невязки по построенной матрице
-        const auto residual =
-            (an_sol - fourier.matvec(an_sol.cwiseProduct(diag_eps))).cwiseProduct(mask) / basis_fn_module -
-            b.cwiseProduct(mask);
-        std::cout << residual.norm() / b.norm() << std::endl;
+        const Types::VectorXc residual =
+            ((an_sol - fourier.matvec(an_sol.cwiseProduct(diag_eps))).cwiseProduct(mask) /
+                basis_fn_module -
+            b.cwiseProduct(mask))
+                .eval();
+        const Types::scalar relative_mie_residual = residual.norm() / b.cwiseProduct(mask).norm();
+        std::cout << relative_mie_residual << std::endl;
 #endif
 
 #if MATRIX_COMPARISON
-        operator_K.set_adaptive_integration_max_levels({80, 40, 40, 20});
+        operator_K.set_adaptive_integration_max_levels({10, 10, 5, 5});
         auto matrix_2 = operator_K.compute_galerkin_matrix(basis_fn_module);
 
         auto rel_err = Utils::relative_frobenius_error(matrix, matrix_2);
@@ -230,28 +158,38 @@ int main() {
 
         // 7. Преобразовываем в векторное поле на ячейках и пишем в данные сетки
         std::vector<Types::Vector3c> field_on_mesh;
+        std::vector<Types::Vector3c> solution_difference;
         field_on_mesh.reserve(mesh.getCells().size());
+        solution_difference.reserve(mesh.getCells().size());
         for (size_t idx = 0; idx < mesh.getCells().size(); ++idx) {
-            field_on_mesh.emplace_back(solution[3 * idx + 0] * basis_fn_module, solution[3 * idx + 1] * basis_fn_module,
-                                       solution[3 * idx + 2] * basis_fn_module);
+            const Types::Vector3c numerical_field{solution[3 * idx] * basis_fn_module,
+                                                  solution[3 * idx + 1] * basis_fn_module,
+                                                  solution[3 * idx + 2] * basis_fn_module};
+            const Types::Vector3c mie_field{an_sol[3 * idx], an_sol[3 * idx + 1], an_sol[3 * idx + 2]};
+            field_on_mesh.emplace_back(numerical_field);
+            solution_difference.emplace_back(numerical_field - mie_field);
         }
 
-        // Добавляем поле
+        // Добавляем численное поле и его разность с решением Ми
         mesh.setVectorData("solution", std::move(field_on_mesh));
+        mesh.setVectorData("solution_difference", std::move(solution_difference));
 
         // Отрисовываем результат
-        const std::string path =
-            "/home/evgen/Education/MasterDegree/thesis/ED-researh/research/volume_regular_dielectrics/";
-        VTK::volume_mesh_withdata_snapshot(mesh, path);
+        VTK::volume_mesh_withdata_snapshot(mesh, output_path);
 
 #if ANALYTICAL_CHECK
-        const Types::scalar phase_shift =
-            std::arg(an_sol[3 * Nx * Ny * Nz / 2]) - std::arg(solution[3 * Nx * Ny * Nz / 2]);
-        std::cout << "Phase shift: " << phase_shift << std::endl;
-        const Types::VectorXc solution_difference =
-            std::exp(Math::Constants::i * phase_shift) * solution - an_sol.cwiseProduct(mask) / basis_fn_module;
-        std::cout << "solution difference relative norm = " << solution_difference.norm() / solution.norm()
-                  << std::endl;
+        const auto comparison_errors = Research::VolDie::Mie::compare_solutions_in_sphere_interior(
+            mesh, "solution", "analytical_solution", SPHERE_RADUIS);
+        std::cout << "Number of fully interior cells = " << comparison_errors.compared_cells << '\n'
+                  << "C-norm error = " << comparison_errors.c_norm << '\n'
+                  << "Relative C-norm error = " << comparison_errors.relative_c_norm << '\n'
+                  << "L2-norm error = " << comparison_errors.l2_norm << '\n'
+                  << "Relative L2-norm error = " << comparison_errors.relative_l2_norm << std::endl;
+
+        convergence_file << Nx - 1 << ',' << relative_mie_residual << ','
+                         << comparison_errors.relative_l2_norm << ','
+                         << comparison_errors.relative_c_norm << '\n';
+        convergence_file.flush();
 #endif
 
 #endif
@@ -274,7 +212,8 @@ int main() {
         std::vector<Types::scalar> an_rsp_vv{};
         an_rsp_vv.resize(N);
 
-        auto mie_rsp = calculate_mie_rsp(phis, SPHERE_RADUIS, Types::complex_d{SPHERE_EPSILON, 0}, k);
+        auto mie_rsp = Research::VolDie::Mie::calculate_rsp(
+            phis, SPHERE_RADUIS, Types::complex_d{SPHERE_EPSILON, 0}, k);
         for (auto &value : mie_rsp.vv) {
             value = 10 * std::log10(value);
         }
@@ -298,12 +237,12 @@ int main() {
 
         std::cout << "RCS calculated" << std::endl;
 
-        std::ofstream rsp_vv_file{path + "sphere_sigma_vv_" + std::to_string(Nx) + ".csv"};
-        std::ofstream rsp_hh_file{path + "sphere_sigma_hh_" + std::to_string(Nx) + ".csv"};
-        std::ofstream an_rsp_vv_file{path + "an_sphere_sigma_vv_" + std::to_string(Nx) + ".csv"};
-        std::ofstream an_rsp_hh_file{path + "an_sphere_sigma_hh_" + std::to_string(Nx) + ".csv"};
-        std::ofstream mie_rsp_vv_file{path + "mie_sigma_vv_" + std::to_string(Nx) + ".csv"};
-        std::ofstream mie_rsp_hh_file{path + "mie_sigma_hh_" + std::to_string(Nx) + ".csv"};
+        std::ofstream rsp_vv_file{output_path + "sphere_sigma_vv_" + std::to_string(Nx) + ".csv"};
+        std::ofstream rsp_hh_file{output_path + "sphere_sigma_hh_" + std::to_string(Nx) + ".csv"};
+        std::ofstream an_rsp_vv_file{output_path + "an_sphere_sigma_vv_" + std::to_string(Nx) + ".csv"};
+        std::ofstream an_rsp_hh_file{output_path + "an_sphere_sigma_hh_" + std::to_string(Nx) + ".csv"};
+        std::ofstream mie_rsp_vv_file{output_path + "mie_sigma_vv_" + std::to_string(Nx) + ".csv"};
+        std::ofstream mie_rsp_hh_file{output_path + "mie_sigma_hh_" + std::to_string(Nx) + ".csv"};
         Utils::to_csv(phis_degree, rsp_vv, "angle", "rsp", rsp_vv_file);
         Utils::to_csv(phis_degree, rsp_hh, "angle", "rsp", rsp_hh_file);
         Utils::to_csv(phis_degree, an_rsp_vv, "angle", "rsp", an_rsp_vv_file);
@@ -327,7 +266,8 @@ int main() {
             field[idx] = operator_K.compute_arbitrary_point(meshgrid[idx], mesh.getVectorData("solution"));
         }
 
-        VTK::field_in_points_snapshot({field}, {}, {"E"}, {}, meshgrid, "electric_filed_" + std::to_string(Nx) , path);
+        VTK::field_in_points_snapshot({field}, {}, {"E"}, {}, meshgrid, "electric_filed_" + std::to_string(Nx),
+                                      output_path);
 #endif
     }
 };

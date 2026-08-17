@@ -1,0 +1,36 @@
+sphere:
+  relative_permittivity:
+    real: 2.56
+    imaginary: 0.0
+  radius_m: 0.5
+
+mesh:
+  # CubeMeshWithData uses grid points, so 41 points produce 40 cells per axis.
+  points_per_axis: [61, 81]
+
+frequency_ghz: 0.6
+
+integration:
+  relative_tolerance: 1.0e-6
+  absolute_tolerance: 1.0e-21
+  level_2d: 3
+  level_3d: 3
+  level_4d: 2
+  level_6d: 2
+  nearness_threshold: 2
+
+incident_wave:
+  polarization: [1.0, 0.0, 0.0]
+  direction: [0.0, 0.0, -1.0]
+
+solver:
+  gmres:
+    max_iterations: 10000
+    tolerance: 1.0e-9
+    restart: 50
+
+angular_samples: 360
+
+output:
+  directory: /home/evgen/Education/MasterDegree/thesis/ED-researh/research/plasmon
+  analytical_rsp_db_offset: 0.0

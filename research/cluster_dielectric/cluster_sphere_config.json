@@ -1,0 +1,25 @@
+{
+  "SPHERE_EPSILON": 2.56,
+  "SPHERE_RADIUS": 0.5,
+  "CUBE_LENGTH": "2 * SPHERE_RADIUS",
+  "NX": 61,
+
+  "RTOL": 1e-6,
+  "ATOL": 1e-21,
+  "LEVEL_2D": 80,
+  "LEVEL_3D": 80,
+  "LEVEL_4D": 80,
+  "LEVEL_6D": 80,
+  "NEARNESS_THRESHOLD": 3,
+
+  "FREQUENCY_GHZ": 1.0,
+  "WAVE_NUMBER": "Types::complex_d{Physics::get_k_on_frquency(FREQUENCY_GHZ), 0.0}",
+  "POLARIZATION": [1.0, 0.0, 0.0],
+  "WAVE_VECTOR": [0.0, 0.0, -1.0],
+
+  "GMRES_MAX_ITERATIONS": 10000,
+  "GMRES_TOLERANCE": 1e-9,
+  "GMRES_RESTART": 5000,
+
+  "OUTPUT_DIRECTORY": "/home/evgen/Education/MasterDegree/thesis/ED-researh/research/cluster_dielectric/"
+}

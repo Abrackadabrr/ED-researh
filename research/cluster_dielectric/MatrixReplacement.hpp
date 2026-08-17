@@ -10,6 +10,10 @@
 
 #include <Eigen/Core>
 
+#include <cmath>
+#include <stdexcept>
+#include <utility>
+
 namespace EMW::Math::LinAgl::Matrix::Wrappers {
 /**
  * Класс-обёртка для факторизованный комплексной матрицы из двух матриц
@@ -80,6 +84,86 @@ class VolumeOperatorMatrixReplacement
     // Нужна для отсечения лишних элементов в векторе неизвестных (так как кое-где не нужно решать систему)
     Types::VectorX<RealScalar> mask_;
     PreconditionerType precond_;
+};
+
+/**
+ * Matrix-free representation of the right-preconditioned volume equation
+ *
+ *     P (I - K D) P C^{-1} P y = P b,
+ *
+ * where D = diag(epsilon - 1), P removes cells outside the scatterer and C is
+ * a full-grid right preconditioner. GMRES solves for y; recover_solution(y)
+ * returns the physical coefficient vector x = P C^{-1} P y.
+ */
+template <typename MatrixType, typename RightPreconditionerType>
+class RightPreconditionedVolumeOperatorMatrixReplacement
+    : public Eigen::EigenBase<
+          RightPreconditionedVolumeOperatorMatrixReplacement<MatrixType, RightPreconditionerType>> {
+  public:
+    using Scalar = Types::complex_d;
+    using RealScalar = Eigen::NumTraits<Scalar>::Real;
+    using StorageIndex = Types::integer;
+    using Vector = Types::VectorX<Scalar>;
+
+    constexpr static Types::integer Options_ = 0;
+    constexpr static RealScalar zeroLike = 1e-7;
+
+    enum { ColsAtCompileTime = Eigen::Dynamic, MaxColsAtCompileTime = Eigen::Dynamic, IsRowMajor = false };
+
+    [[nodiscard]] decltype(auto) rows() const { return mat_.rows(); }
+    [[nodiscard]] decltype(auto) cols() const { return mat_.cols(); }
+
+    template <typename Rhs>
+    Eigen::Product<RightPreconditionedVolumeOperatorMatrixReplacement, Rhs, Eigen::AliasFreeProduct>
+    operator*(const Eigen::MatrixBase<Rhs> &x) const {
+        return Eigen::Product<RightPreconditionedVolumeOperatorMatrixReplacement, Rhs, Eigen::AliasFreeProduct>(
+            *this, x.derived());
+    }
+
+    RightPreconditionedVolumeOperatorMatrixReplacement(const MatrixType &mat, const Vector &epsilon_vec,
+                                                        const RightPreconditionerType &right_preconditioner)
+        : mat_(mat), right_preconditioner_(right_preconditioner), mask_(Types::VectorX<RealScalar>::Zero(mat.rows())) {
+        if (mat.rows() != mat.cols() || epsilon_vec.size() != mat.cols())
+            throw std::invalid_argument("Epsilon is not set up correctly");
+        if (right_preconditioner.rows() != mat.rows() || right_preconditioner.cols() != mat.cols())
+            throw std::invalid_argument("The right preconditioner has incompatible dimensions");
+
+        for (Eigen::Index index = 0; index < epsilon_vec.size(); ++index)
+            mask_(index) = std::abs(epsilon_vec(index)) > zeroLike ? RealScalar{1} : RealScalar{0};
+        epsilon_vec_ = epsilon_vec.cwiseProduct(mask_);
+    }
+
+    [[nodiscard]] const MatrixType &get_mat() const { return mat_; }
+    [[nodiscard]] const RightPreconditionerType &get_right_preconditioner() const {
+        return right_preconditioner_;
+    }
+    [[nodiscard]] const Vector &get_epsilon_vec() const { return epsilon_vec_; }
+    [[nodiscard]] const Types::VectorX<RealScalar> &get_mask() const { return mask_; }
+
+    template <typename Rhs> [[nodiscard]] Vector modify_rhs_according_to_mask(const Rhs &rhs) const {
+        if (rhs.size() != rows())
+            throw std::invalid_argument("The right-hand side has incompatible dimensions");
+        return rhs.cwiseProduct(mask_);
+    }
+
+    /** Applies R = P C^{-1} P to a GMRES vector through the FFT preconditioner. */
+    template <typename Rhs> [[nodiscard]] Vector apply_right_preconditioner(const Rhs &rhs) const {
+        if (rhs.size() != cols())
+            throw std::invalid_argument("The vector has incompatible dimensions");
+        const Vector projected_rhs = rhs.cwiseProduct(mask_);
+        return right_preconditioner_.solve(projected_rhs).cwiseProduct(mask_);
+    }
+
+    /** Converts the transformed GMRES unknown y to the physical unknown x. */
+    template <typename Rhs> [[nodiscard]] Vector recover_solution(const Rhs &transformed_solution) const {
+        return apply_right_preconditioner(transformed_solution);
+    }
+
+  private:
+    const MatrixType &mat_;
+    const RightPreconditionerType &right_preconditioner_;
+    Vector epsilon_vec_;
+    Types::VectorX<RealScalar> mask_;
 };
 
 template<typename matrix_t>
@@ -157,6 +241,36 @@ struct generic_product_impl<factored_matrix_replacement<MatrixType1, Preconditio
             dst.noalias() += preconditioned - (lhs.get_mat() * preconditioned.cwiseProduct(lhs.get_epsilon_vec())).cwiseProduct(mask);
         }
     };
+
+// -------- Right-preconditioned volume operator --------
+template <typename MatrixType, typename RightPreconditionerType>
+using right_preconditioned_volume_operator =
+    EMW::Math::LinAgl::Matrix::Wrappers::RightPreconditionedVolumeOperatorMatrixReplacement<
+        MatrixType, RightPreconditionerType>;
+
+template <typename MatrixType, typename RightPreconditionerType, typename Rhs>
+struct generic_product_impl<right_preconditioned_volume_operator<MatrixType, RightPreconditionerType>, Rhs,
+                            SparseShape, DenseShape, GemvProduct>
+    : generic_product_impl_base<
+          right_preconditioned_volume_operator<MatrixType, RightPreconditionerType>, Rhs,
+          generic_product_impl<right_preconditioned_volume_operator<MatrixType, RightPreconditionerType>, Rhs>> {
+    using Replacement = right_preconditioned_volume_operator<MatrixType, RightPreconditionerType>;
+    using Scalar = typename Product<Replacement, Rhs>::Scalar;
+    using Vector = EMW::Types::VectorX<Scalar>;
+
+    template <typename Dest>
+    static void scaleAndAddTo(Dest &dst, const Replacement &lhs, const Rhs &rhs, const Scalar &alpha) {
+        // Right preconditioning means that the physical vector is formed first:
+        // z = P C^{-1} P rhs, followed by the original volume operator P(I-KD)P.
+        const Vector physical_vector = lhs.apply_right_preconditioner(rhs);
+        const Vector contrast_vector = physical_vector.cwiseProduct(lhs.get_epsilon_vec());
+        const Vector integral_term = lhs.get_mat() * contrast_vector;
+        const Vector result = physical_vector - integral_term.cwiseProduct(lhs.get_mask());
+
+        // Eigen may call this routine with alpha != 1 while GMRES updates its residual.
+        dst.noalias() += alpha * result;
+    }
+};
 
 // ------------- Simple Replacement --------------
 

@@ -1,0 +1,25 @@
+{
+  "predicted_minimum_eigenvalue_modulus": 1.1102230246251565e-16,
+  "predicted_maximum_eigenvalue_modulus": 15.580286420529987,
+  "predicted_spectral_condition_ratio": 1.403347442356489e+17,
+  "minimum_point": {
+    "real": 1.1102230246251565e-16,
+    "imag": 0.0,
+    "source": "branch_cut"
+  },
+  "maximum_point": {
+    "real": -2.45856593413014,
+    "imag": 15.385082986233318,
+    "source": "Mie resonance: l=3, family=c"
+  },
+  "branch_cut": {
+    "minimum_modulus": 1.1102230246251565e-16,
+    "maximum_modulus": 5.000000000000001
+  },
+  "interpretation": {
+    "formula": "kappa_2(A) >= max_j |lambda_j(A)| / min_j |lambda_j(A)|",
+    "normal_matrix": "For a normal matrix this ratio equals the 2-norm condition number.",
+    "nonnormal_matrix": "For a nonnormal matrix it is only a lower bound when the values used are actual eigenvalues.",
+    "prediction_caveat": "This file uses the analytically predicted spectrum; for a finite discretized matrix the result is a spectral estimate."
+  }
+}\n

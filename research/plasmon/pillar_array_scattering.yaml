@@ -1,0 +1,48 @@
+# Physical optical wavelength. All physical geometry dimensions are also specified in nanometers.
+# The solver maps this wavelength to exactly 1 model meter and derives the geometry scale from it.
+wavelength_nm: 600.0
+
+# Geometry is kept in a separate file. A relative path is resolved from this file.
+geometry_file: pillar_array_geometry.yaml
+
+materials:
+  substrate_relative_permittivity:
+    real: -15.0
+    imaginary: 0.4
+  pillar_relative_permittivity:
+    real: -15.0
+    imaginary: 0.4
+
+mesh:
+  # Number of cubic volume cells along one side of a geometry lattice cell.
+  cells_per_geometry_cell_side: 20
+
+incident_wave:
+  # Ten degrees from the substrate normal; the vector points towards the substrate.
+  direction: [0.17364817766693033, 0.0, -0.984807753012208]
+  # Unit-amplitude polarization in the xz incidence plane.
+  polarization: [0.984807753012208, 0.0, 0.17364817766693033]
+
+integration:
+  relative_tolerance: 1.0e-6
+  absolute_tolerance: 1.0e-21
+  level_2d: 6
+  level_3d: 5
+  level_4d: 3
+  level_6d: 3
+  nearness_threshold: 2
+
+solver:
+  gmres:
+    max_iterations: 5000
+    tolerance: 1.0e-7
+    restart: 1000
+
+bistatic_rcs:
+  # Signed angle in the incidence plane. phi = 0 follows the incident wave vector.
+  phi_min_deg: -90.0
+  phi_max_deg: 90.0
+  samples: 362
+
+output:
+  directory: /home/evgen/Education/MasterDegree/thesis/ED-researh/research/plasmon

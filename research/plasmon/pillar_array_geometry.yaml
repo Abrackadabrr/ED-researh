@@ -1,0 +1,34 @@
+lattice:
+  # Lower corner of the finite substrate. The lattice lies in the xy plane.
+  min_corner_nm: [-550.0, -600.0, 0.0]
+  cells: [11, 11]
+  cell_size_nm: [100.0, 100.0]
+
+substrate:
+  # One layer of the volume mesh: 100 nm / 10 = 10 nm.
+  thickness_nm: 10.0
+
+pillar:
+  # All pillars have the same rectangular geometry and start at the top of the substrate.
+  size_nm: [100.0, 100.0, 200.0]
+
+  # Integer coordinates of geometry cells containing pillar centers.
+  centers:
+    - [0, 0]
+    - [4, 0]
+    - [8, 0]
+    - [2, 2]
+    - [6, 2]
+    - [10, 2]
+    - [0, 4]
+    - [4, 4]
+    - [8, 4]
+    - [2, 6]
+    - [6, 6]
+    - [10,6]
+    - [0, 8]
+    - [4, 8]
+    - [8, 8]
+    - [2, 10]
+    - [6, 10]
+    - [10, 10]

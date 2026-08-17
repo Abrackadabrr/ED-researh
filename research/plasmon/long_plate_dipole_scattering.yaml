@@ -1,0 +1,57 @@
+wavelength_m: 0.633
+
+plate:
+  dimensions_m:
+    length: 3.75    # x
+    width: 4        # y
+    thickness: 0.2  # z
+  min_corner_m: [0.0, -2, -0.1]
+  relative_permittivity:
+    real: -11.6
+    imaginary: 1.2
+
+mesh:
+  # lambda_inside = wavelength_m / sqrt(abs(relative_permittivity)).
+  cells_per_internal_wavelength: 11.0
+
+source:
+  # The line source is centered outside the left plate edge.
+  center_m: [-0.35, 0.0, 0.0]
+  # Same direction as the previous Hertz dipole moment.
+  direction: [0.0, 0.0, 1.0]
+  length_wavelengths: 7.0
+  current_amplitude:
+    real: 1.0
+    imaginary: 0.0
+
+integration:
+  relative_tolerance: 1.0e-6
+  absolute_tolerance: 1.0e-21
+  # Higher maxima are important for pointwise field evaluation near the plate.
+  level_2d: 10
+  level_3d: 8
+  level_4d: 4
+  level_6d: 4
+  nearness_threshold: 2
+
+solver:
+  gmres:
+    max_iterations: 2000
+    tolerance: 1.0e-5
+    restart: 100
+
+# Uniform point grid in a plane parallel to xz. The coordinates below place
+# samples between volume-mesh faces, where the pointwise integral is regular.
+field_plane:
+  y_m: 0
+  x_min_m: 0
+  x_max_m: 4.25
+  z_min_m: -1
+  z_max_m: 1
+  points_x: 200
+  points_z: 40
+
+angular_samples: 360
+
+output:
+  directory: /home/evgen/Education/MasterDegree/thesis/ED-researh/research/plasmon

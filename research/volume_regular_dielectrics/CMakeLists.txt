@@ -41,8 +41,6 @@ list(APPEND TASKS
         dielectric_sphere_fft.cpp
         adaptive_intergation_study.cpp
         intergation_modes_study.cpp
-        strong_scalability_test.cpp
-        cluster_sphere.cpp
 )
 
 foreach (TASK IN LISTS TASKS)
@@ -56,3 +54,6 @@ foreach (TASK IN LISTS TASKS)
     #    target_compile_options(${EXE_NAME} PRIVATE -Wconversion)
     target_compile_definitions(${EXE_NAME} PUBLIC "OMP_NESTED=ON")
 endforeach ()
+
+target_sources(vol_die_dielectric_sphere_fft PRIVATE
+        ../cluster_dielectric/analytical_solution/SphereMieAnalytical.cpp)

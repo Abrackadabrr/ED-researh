@@ -1,0 +1,46 @@
+sphere:
+  relative_permittivity:
+    real: 2.56
+    imaginary: 0.0
+  radius_m: 0.5
+
+mesh:
+  # This lower bound is useful at frequencies where the wavelength condition
+  # alone would produce a very coarse representation of the sphere.
+  min_cells_per_axis: 20
+  # N in dx <= lambda_inside/N, lambda_inside = lambda_0/sqrt(|epsilon_r|).
+  cells_per_internal_wavelength: 10.0
+
+frequency_sweep_ghz:
+  start: 0.3
+  end: 0.6
+  step: 0.05
+
+integration:
+  relative_tolerance: 1.0e-6
+  absolute_tolerance: 1.0e-21
+  level_2d: 3
+  level_3d: 3
+  level_4d: 2
+  level_6d: 2
+  nearness_threshold: 2
+
+incident_wave:
+  polarization: [1.0, 0.0, 0.0]
+  direction: [0.0, 0.0, -1.0]
+
+solver:
+  gmres:
+    max_iterations: 10000
+    tolerance: 1.0e-9
+    restart: 50
+
+bistatic_diagram:
+  # theta includes both poles; phi covers [0, 360) without duplicating 360 degrees.
+  polar_samples: 91
+  azimuthal_samples: 180
+
+output:
+  directory: ./sphere_frequency_sweep_results
+  summary_file: sphere_frequency_summary.csv
+  bistatic_file_prefix: sphere_bistatic

@@ -46,7 +46,9 @@
 research/*/cmake-build-debug
 research/*/cmake-build-release
 research/*/cmake-build-relwithdebinfo
-
+/.vscode
+/CMakeFiles/
+/research/cluster_dielectric/results_from_rufina/
 # Research generated files
 *.csv
 *.vtu

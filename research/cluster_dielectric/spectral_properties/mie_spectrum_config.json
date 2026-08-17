@@ -1,0 +1,29 @@
+{
+  "problem": {
+    "kr": 6.28,
+    "eps_real": -5,
+    "eps_imag": 0
+  },
+  "search": {
+    "spectrum_tol": 0.01,
+    "search_radius": 5.0,
+    "grid_real": 100,
+    "grid_imag": 100,
+    "max_seeds": 30,
+    "residual_tol": 1e-8,
+    "root_tol": 1e-11,
+    "root_maxiter": 120,
+    "empty_orders_to_stop": 4,
+    "parallel_workers": 12
+  },
+  "analysis": {
+    "condition_estimate_enabled": true,
+    "gmres_estimate_enabled": false
+  },
+  "output": {
+    "plot_filename": "mie_spectrum_plasmon.png",
+    "csv_filename": "mie_resonances_plasmon.csv",
+    "show_plot": false,
+    "verbose": true
+  }
+}
